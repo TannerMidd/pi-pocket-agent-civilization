@@ -41,6 +41,8 @@ const MAX_SEEN = 5000;
 /** How many of the newest "already counted" keys the file keeps, so a replay after a restart counts once. */
 const SAVED_SEEN = 2000;
 const MAX_PENDING = 200;
+/** Events waiting to go to the pages, at most; past it the pages load the world again instead. */
+const MAX_OUTBOX = 3000;
 /**
  * Event fields that the file keeps for a session not yet confirmed: none can hold what someone wrote, a path, a
  * title, or a name. `s` keeps only its kind (`mcp`, not `mcp:server`); `from` and `to` lose a person's name.
@@ -130,6 +132,8 @@ interface Conv {
     users?: number;
     /** A subagent that a tool call of its parent started, as that call's result says: seen when its parent is. */
     sure?: boolean;
+    /** The newest user message seen: its time, and how many messages with that time were seen. */
+    cursor?: { t: number; k: number };
 }
 
 interface Resource {
@@ -185,6 +189,19 @@ const SECRETS: [RegExp, string][] = [
         /\b([A-Za-z0-9_]*(?:key|token|secret|passw(?:or)?d|pwd)[A-Za-z0-9_]*)(\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi,
         "$1$2•••",
     ],
+    // JSON: "password": "…", "api_key": "…"
+    [
+        /("[A-Za-z0-9_-]*(?:key|token|secret|passw(?:or)?d|pwd)[A-Za-z0-9_-]*"\s*:\s*)"[^"]*"/gi,
+        '$1"•••"',
+    ],
+    // Flags: --password x, --token=x
+    [
+        /(--?(?:password|passwd|pass|pwd|token|secret|api-?key|auth)(?:=|\s+))("[^"]*"|'[^']*'|\S+)/gi,
+        "$1•••",
+    ],
+    // curl -u user:pass, and user:pass@ in an address
+    [/(\s-u\s*)([^\s:]+):(\S+)/g, "$1$2:•••"],
+    [/([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+):([^\s@/]+)@/gi, "$1:•••@"],
 ];
 
 /** A short one-line form of any text, with what looks like a secret masked. */
@@ -315,13 +332,13 @@ function classify(
         case "mcp_call":
         case "mcp_call_read_only":
             return {
-                s: `mcp:${str("server") || "?"}`,
+                s: `mcp:${clip(str("server"), 60) || "?"}`,
                 i: str("tool") || "call",
                 l: `${str("server")} · ${str("tool")}`,
             };
         case "mcp_tools":
             return {
-                s: `mcp:${str("server") || "all"}`,
+                s: `mcp:${clip(str("server"), 60) || "all"}`,
                 i: "list tools",
                 l: `looked up ${str("server") || "MCP"} tools`,
             };
@@ -402,6 +419,15 @@ interface Shared {
     generation: number;
     /** The number of the last batch sent; a page that misses one loads the world again. */
     batch: number;
+    /** What waits to go to the pages, for every version: old hooks still running add to it, the newest sends it. */
+    out: {
+        changed: { convs: Set<string>; res: Set<string>; humans: Set<string> };
+        unknown: Set<string>;
+        outbox: Ev[];
+        late: Ev[];
+    };
+    /** Starts the newest version's flush and save timers. */
+    kick: () => void;
 }
 
 /** The world in the file, or an empty one. Every record keyed by text from outside has no prototype. */
@@ -457,6 +483,13 @@ export default async function createAgentCivilization(host: Host, web: Web) {
         saving: Promise.resolve(),
         generation: 0,
         batch: 0,
+        out: {
+            changed: { convs: new Set(), res: new Set(), humans: new Set() },
+            unknown: new Set(),
+            outbox: [],
+            late: [],
+        },
+        kick: () => {},
     };
 
     if (shared === undefined) {
@@ -468,9 +501,10 @@ export default async function createAgentCivilization(host: Host, web: Web) {
     const { world, verified, held, pending, seen } = state;
     // Tabs reload the world when this changes: a restart or a reset can make ids go back.
     const boot = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const changed = { convs: new Set<string>(), res: new Set<string>(), humans: new Set<string>() };
-    const unknown = new Set<string>();
-    let outbox: Ev[] = [];
+    // Events of a conversation shown just now, from before it was, wait in `out.late`: the page puts them in
+    // their place.
+    const out = state.out;
+    const { changed, unknown } = out;
     let flushTimer: NodeJS.Timeout | undefined;
     let saveTimer: NodeJS.Timeout | undefined;
     let saves = 0;
@@ -643,6 +677,9 @@ export default async function createAgentCivilization(host: Host, web: Web) {
                         key,
                         value: (table as Record<string, unknown>)[key] ?? null,
                     });
+                } else {
+                    // Not the owner's to see yet: the meta route sends it when Pi Pocket confirms it.
+                    set.delete(key);
                 }
             }
         }
@@ -664,7 +701,9 @@ export default async function createAgentCivilization(host: Host, web: Web) {
         };
 
         for (const part of parts) {
-            const bytes = JSON.stringify(part.value).length + part.key.length + 8;
+            // UTF-8 bytes, as they go out. No one record passes BATCH_BYTES: its maps and keys are capped.
+            const bytes =
+                Buffer.byteLength(JSON.stringify(part.value)) + Buffer.byteLength(part.key) + 8;
 
             if (total + bytes > FLUSH_BYTES && total > 0) {
                 break;
@@ -682,13 +721,13 @@ export default async function createAgentCivilization(host: Host, web: Web) {
 
         let sent = 0;
 
-        for (const event of outbox) {
+        for (const event of out.outbox) {
             if (!evOk(event)) {
                 sent++;
                 continue;
             }
 
-            const bytes = JSON.stringify(event).length + 1;
+            const bytes = Buffer.byteLength(JSON.stringify(event)) + 1;
 
             if (total + bytes > FLUSH_BYTES && total > 0) {
                 break;
@@ -699,7 +738,12 @@ export default async function createAgentCivilization(host: Host, web: Web) {
             sent++;
         }
 
-        outbox = outbox.slice(sent);
+        out.outbox = out.outbox.slice(sent);
+
+        // Late events go in the first batch; they are few (one subagent's start).
+        const back = out.late.filter(evOk).slice(-300);
+
+        out.late = [];
 
         const ask = [...unknown].filter((id) => world.convs[id] !== undefined && !isOk(id));
 
@@ -711,23 +755,36 @@ export default async function createAgentCivilization(host: Host, web: Web) {
 
         batches[0]!.unknown = ask;
 
+        if (back.length > 0) {
+            batches[0]!.late = back;
+        }
+
         for (const each of batches) {
             each.n = ++state.batch;
             web.send("batch", each);
         }
 
-        if (outbox.length > 0 || changed.convs.size + changed.res.size + changed.humans.size > 0) {
+        // Only what the byte limit held back waits for another flush.
+        if (
+            out.outbox.length > 0 ||
+            changed.convs.size + changed.res.size + changed.humans.size > 0
+        ) {
             flushTimer = setTimeout(flush, 1000);
         }
     }
 
-    function schedule() {
+    // Whichever version's code asks, the newest version's timers flush and save.
+    state.kick = () => {
         if (disposed) {
             return;
         }
 
         flushTimer ??= setTimeout(flush, FLUSH_MS);
         saveTimer ??= setTimeout(save, SAVE_MS);
+    };
+
+    function schedule() {
+        state.kick();
     }
 
     function emit(k: string, data: Record<string, unknown>): Ev {
@@ -739,7 +796,16 @@ export default async function createAgentCivilization(host: Host, web: Web) {
             world.events.splice(0, world.events.length - MAX_EVENTS);
         }
 
-        outbox.push(event);
+        out.outbox.push(event);
+
+        // Far behind (a burst faster than the pages take): drop the queue and skip a batch number. Each page
+        // sees the gap and loads the whole world again, which is cheaper than all of it in parts.
+        if (out.outbox.length > MAX_OUTBOX) {
+            out.outbox = [];
+            out.late = [];
+            state.batch++;
+        }
+
         schedule();
 
         return event;
@@ -887,12 +953,21 @@ export default async function createAgentCivilization(host: Host, web: Web) {
             found.sure = false;
         }
 
+        const hidden = !isOk(child);
+
         found.kind = kind;
         found.parent = parent;
         found.sure = found.sure === true || sure;
 
+        // Shown just now (its parent's tool result named it): what it did before goes out too, late.
+        if (hidden && isOk(child)) {
+            out.late.push(
+                ...world.events.filter((event) => event.c === child || event.to === child),
+            );
+        }
+
         if (name) {
-            found.name = name;
+            found.name = clip(name, 60);
         }
 
         if (title && !found.title) {
@@ -1059,6 +1134,11 @@ export default async function createAgentCivilization(host: Host, web: Web) {
                 here.calls++;
                 here.tools[safeKey(call.name)] = (here.tools[safeKey(call.name)] ?? 0) + 1;
 
+                // Keys are cut short too: a path of 5000 characters stays out of the world.
+                if (what.i !== undefined) {
+                    what.i = clip(what.i, 160);
+                }
+
                 if (what.s === "files" && what.i) {
                     const entry = (here.files[safeKey(what.i)] ??= { r: 0, w: 0, last: 0 });
 
@@ -1195,17 +1275,23 @@ export default async function createAgentCivilization(host: Host, web: Web) {
         beforeRequest: (request, api) => {
             try {
                 // A request is tried again after a failure or a restart, with the same messages: count it once.
-                if (!once(`q:${api.taskId}:${request.messages.length}`)) {
+                const lastAt = request.messages.at(-1)?.timestamp ?? "";
+
+                if (!once(`q:${api.taskId}:${request.messages.length}:${lastAt}`)) {
                     return undefined;
                 }
 
                 const id = String(api.conversationId);
                 const here = conv(id);
                 const users = request.messages.filter((each) => each.role === "user");
-                const fresh = (each: (typeof users)[number], index: number) =>
-                    once(`u:${id}:${"timestamp" in each ? each.timestamp : `#${index}`}`);
+                // Where it got to, kept with the conversation: the newest user message's time, and how many with
+                // that same time it has seen (several can share one). Only what lies past it is new, so a replay,
+                // a compaction, or any history that comes back is never new again.
+                const stamp = (each: (typeof users)[number]) =>
+                    "timestamp" in each && typeof each.timestamp === "number" ? each.timestamp : 0;
+                let cursor = here.cursor;
 
-                if (here.users === undefined) {
+                if (cursor === undefined) {
                     // First sight: only the messages this request answers (after the last of Pi's) are new.
                     let trailing = 0;
 
@@ -1217,20 +1303,39 @@ export default async function createAgentCivilization(host: Host, web: Web) {
                         trailing++;
                     }
 
-                    users.forEach((each, index) => {
-                        if (fresh(each, index) && index >= users.length - trailing) {
-                            arrived(id, textOf(each.content), true);
-                        }
-                    });
-                } else {
-                    // Each user message once, by its own time: never by its words, which can repeat.
-                    users.forEach((each, index) => {
-                        if (fresh(each, index)) {
-                            arrived(id, textOf(each.content), false);
-                        }
-                    });
+                    const old = users.slice(0, users.length - trailing);
+                    const last = old.at(-1);
+
+                    cursor = last
+                        ? {
+                              t: stamp(last),
+                              k: old.filter((each) => stamp(each) === stamp(last)).length,
+                          }
+                        : { t: -1, k: 0 };
                 }
 
+                const first = here.cursor === undefined;
+                let same = 0;
+
+                for (const each of users) {
+                    const time = stamp(each);
+
+                    // Older than the cursor, or one of the messages at its time it already saw: not new.
+                    if (time < cursor.t || (time === cursor.t && ++same <= cursor.k)) {
+                        continue;
+                    }
+
+                    arrived(id, textOf(each.content), first);
+                }
+
+                const last = users.at(-1);
+
+                here.cursor = last
+                    ? {
+                          t: stamp(last),
+                          k: users.filter((each) => stamp(each) === stamp(last)).length,
+                      }
+                    : cursor;
                 here.users = users.length;
                 emit("think", {
                     c: id,
@@ -1440,7 +1545,8 @@ export default async function createAgentCivilization(host: Host, web: Web) {
         seen.clear();
         verified.clear();
         // Nothing from before goes out after the reset, not even what waited to be sent.
-        outbox = [];
+        out.outbox = [];
+        out.late = [];
         changed.convs.clear();
         changed.res.clear();
         changed.humans.clear();

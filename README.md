@@ -28,7 +28,7 @@ extensions/
   agent-civilization.ts
   agent-civilization/
     index.js  town.js  pixels.js  demo.js  sound.js  style.css
-    fonts/    PressStart2P.woff2  VT323.woff2  OFL-PressStart2P.txt  OFL-VT323.txt
+    fonts/    CivPixelStart.woff2  VT323.woff2  OFL-PressStart2P.txt  OFL-VT323.txt
 ```
 
 Do not copy `test/`, `docs/`, `package.json`, or `_pocket.d.ts`.
@@ -149,7 +149,7 @@ no prototype.
 - `pixels.js`: the palette, a 5×7 bitmap font, 8×8 icons, and the sprites.
 - `demo.js`: a plausible fake town, in the server's event format.
 - `sound.js`: chiptune music and effects made with Web Audio; no sound files. Off until you turn it on.
-- `style.css` and `fonts/`: the windows, buttons, and phone layout, in Press Start 2P and VT323 (WOFF2,
+- `style.css` and `fonts/`: the windows, buttons, and phone layout, in Civ Pixel Start (Press Start 2P, renamed) and VT323 (WOFF2,
   the only font type Pi Pocket serves to extensions).
 
 ## Develop
@@ -167,9 +167,13 @@ npm test         # the server module: hooks, privacy, saving, batches, replays, 
 ## License
 
 The code is under the [MIT License](LICENSE). The fonts are under the SIL Open Font License 1.1, from
-[google/fonts](https://github.com/google/fonts), converted to WOFF2 with `woff2_compress` (glyphs and
-names unchanged):
+[google/fonts](https://github.com/google/fonts), converted to WOFF2 (the only font type Pi Pocket serves
+to extensions), with their glyphs unchanged:
 
-- [Press Start 2P](agent-civilization/fonts/OFL-PressStart2P.txt) 3.000, © 2012 The Press Start 2P Project
-  Authors, Reserved Font Name "Press Start 2P" (`ofl/pressstart2p`).
-- [VT323](agent-civilization/fonts/OFL-VT323.txt) 2.000, © 2011 The VT323 Project Authors (`ofl/vt323`).
+- **Civ Pixel Start** (`CivPixelStart.woff2`) is Press Start 2P 3.000 (`ofl/pressstart2p`), © 2012 The Press
+  Start 2P Project Authors, under [its license](agent-civilization/fonts/OFL-PressStart2P.txt). "Press
+  Start 2P" is a Reserved Font Name, and a change of format makes a Modified Version, so this one has a
+  name of its own; its copyright notice is unchanged. [`scripts/rename-font.py`](scripts/rename-font.py)
+  makes it.
+- **VT323** (`VT323.woff2`) is VT323 2.000 (`ofl/vt323`), © 2011 The VT323 Project Authors, under
+  [its license](agent-civilization/fonts/OFL-VT323.txt). It has no Reserved Font Name.

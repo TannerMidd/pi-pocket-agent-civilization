@@ -2,8 +2,8 @@
  * fonts/OFL-*.txt). */
 
 @font-face {
-    font-family: "Civ Press Start";
-    src: url("fonts/PressStart2P.woff2") format("woff2");
+    font-family: "Civ Pixel Start";
+    src: url("fonts/CivPixelStart.woff2") format("woff2");
     font-display: swap;
 }
 
@@ -20,7 +20,7 @@
 }
 
 .civ-root {
-    --civ-title: "Civ Press Start", ui-monospace, monospace;
+    --civ-title: "Civ Pixel Start", ui-monospace, monospace;
     --civ-body: "Civ VT323", ui-monospace, monospace;
     --civ-ink: #1a1c2c;
     --civ-win: #20307a;

@@ -103,7 +103,7 @@ function insertEvents(store, events) {
         store.maxId = Math.max(store.maxId, store.events.at(-1).id);
     }
 
-    return fresh.length;
+    return fresh;
 }
 
 const portraits = new Map();
@@ -313,7 +313,7 @@ export default function setup(pocket) {
         if (
             store.loaded &&
             typeof batch.n === "number" &&
-            store.batch &&
+            typeof store.batch === "number" &&
             batch.n !== store.batch + 1
         ) {
             if (batch.n > store.batch) {
@@ -325,7 +325,8 @@ export default function setup(pocket) {
 
         store.batch = batch.n ?? store.batch;
 
-        const fresh = mergeInto(store, batch);
+        // Events of a session shown just now, from before it was: in their place, then live like the rest.
+        const fresh = [...insertEvents(store, batch.late ?? []), ...mergeInto(store, batch)];
 
         track(fresh);
         listeners.forEach((listener) => listener(fresh));
@@ -996,7 +997,7 @@ export default function setup(pocket) {
                         store.res = answer.res ? table(answer.res) : store.res;
                         store.humans = answer.humans ? table(answer.humans) : store.humans;
 
-                        const added = insertEvents(store, answer.events ?? []);
+                        const added = insertEvents(store, answer.events ?? []).length;
 
                         // The demo town has data of its own: the real one waits in the store until it is
                         // back. A replay shows the past: it takes the new events when it ends.

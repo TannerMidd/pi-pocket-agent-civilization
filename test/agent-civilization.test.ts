@@ -445,3 +445,142 @@ test("Pi Pocket 0.19 formats: a person's name, a linked session, and a schedule"
     );
     await town.dispose();
 });
+
+test("two different messages with the same time both arrive, and old ones never come back", async () => {
+    const town = await harness();
+    const user = (text: string, timestamp: number) => ({ role: "user", content: text, timestamp });
+    const ask = (messages: unknown[]) =>
+        town.handlers.beforeRequest!({ messages }, town.api("1", `task-${messages.length}`), {});
+
+    await town.meta("1");
+
+    const history = [user("first", 5), { role: "assistant", content: [], timestamp: 6 }];
+
+    ask(history);
+    // Two messages placed at one moment (Pi Durable gives them the same time).
+    history.push(user("one", 10), user("two", 10));
+    ask(history);
+
+    const both = town
+        .world()
+        .events.filter((event) => event.k === "msg")
+        .map((event) => event.text);
+
+    assert.deepEqual(both, ["one", "two"]);
+
+    // Thousands more, then a compaction keeps only the last few: none of the old ones is new again.
+    for (let index = 0; index < 6000; index++) {
+        history.push(user(`m${index}`, 100 + index));
+    }
+
+    ask(history);
+
+    const lastId = Math.max(...town.world().events.map((event) => event.id as number));
+
+    ask([user("summary", 1), ...history.slice(-3), user("newest", 99_999)]);
+
+    const added = town
+        .world()
+        .events.filter((event) => (event.id as number) > lastId && event.k === "msg")
+        .map((event) => event.text);
+
+    assert.deepEqual(added, ["newest"]);
+    await town.dispose();
+});
+
+test("a subagent's first events reach open pages once its parent's result names it", async () => {
+    const town = await harness();
+    const text = "Find every caller of spend.check and list them";
+
+    await town.meta("1");
+    town.tool("spawn", "1", "subagent", { action: "spawn", name: "scout", message: text });
+    // The subagent starts before its parent's tool call returns.
+    town.handlers.beforeRequest!(
+        { messages: [{ role: "user", content: text, timestamp: 1 }] },
+        town.api("2"),
+        {},
+    );
+    town.tool("r1", "2", "read", { path: "src/spend.ts" });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    town.handlers.afterTool!(
+        {
+            id: "spawn",
+            name: "subagent",
+            arguments: { action: "spawn", name: "scout", message: text },
+        },
+        {
+            isError: false,
+            output: [],
+            details: { conversationId: "2", name: "scout", action: "spawn" },
+        },
+        town.api("1"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const sent = town.sent
+        .filter((each) => each.event === "batch")
+        .flatMap((each) => {
+            const batch = each.data as {
+                events: { c?: string; k: string }[];
+                late?: { c?: string; k: string }[];
+            };
+
+            return [...batch.events, ...(batch.late ?? [])];
+        });
+
+    assert.ok(
+        sent.some((event) => event.c === "2" && event.k === "tool"),
+        "its read went out",
+    );
+    await town.dispose();
+});
+
+test("a hidden session never keeps the pages busy with empty batches", async () => {
+    const town = await harness();
+
+    town.tool("t1", "9", "read", { path: "a.md" });
+    await new Promise((resolve) => setTimeout(resolve, 2600));
+
+    const batches = town.sent.filter((each) => each.event === "batch");
+
+    assert.ok(batches.length <= 1, `${batches.length} batches for one hidden call`);
+    await town.dispose();
+});
+
+test("batches stay under the app's limit in bytes, not characters", async () => {
+    const town = await harness();
+
+    await town.meta("1");
+
+    for (let index = 0; index < 1200; index++) {
+        town.tool(`u${index}`, "1", "bash", {
+            command: `echo ${"日本語のテキスト".repeat(12)} ${index}`,
+        });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2600));
+
+    for (const each of town.sent.filter((sent) => sent.event === "batch")) {
+        assert.ok(Buffer.byteLength(JSON.stringify(each.data)) < 256 * 1024);
+    }
+
+    await town.dispose();
+});
+
+test("passwords in flags, JSON, and addresses are masked too", async () => {
+    const town = await harness();
+
+    await town.meta("1");
+    town.tool("s1", "1", "bash", { command: "mysql --password hunter2xyz -u root" });
+    town.tool("s2", "1", "bash", { command: "curl -u admin:topsecret9 https://api.example.com" });
+    town.tool("s3", "1", "bash", { command: "git clone https://me:tok3nvalue@example.com/r.git" });
+    town.tool("s4", "1", "bash", { command: `curl -d '{"password":"pa55word!"}' https://x` });
+
+    const kept = JSON.stringify(town.world());
+
+    for (const secret of ["hunter2xyz", "topsecret9", "tok3nvalue", "pa55word!"]) {
+        assert.ok(!kept.includes(secret), `${secret} was kept`);
+    }
+
+    await town.dispose();
+});
