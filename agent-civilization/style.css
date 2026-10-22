@@ -1,0 +1,907 @@
+/* Agent Civilization: an old game's windows over the town. Fonts: Press Start 2P and VT323 (SIL Open Font License,
+ * fonts/OFL-*.txt). */
+
+@font-face {
+    font-family: "Civ Press Start";
+    src: url("fonts/PressStart2P.woff2") format("woff2");
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Civ VT323";
+    src: url("fonts/VT323.woff2") format("woff2");
+    font-display: swap;
+}
+
+.ext-page-body:has(> .civ-root) {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+}
+
+.civ-root {
+    --civ-title: "Civ Press Start", ui-monospace, monospace;
+    --civ-body: "Civ VT323", ui-monospace, monospace;
+    --civ-ink: #1a1c2c;
+    --civ-win: #20307a;
+    --civ-win2: #101848;
+    --civ-edge: #f4f4f4;
+    --civ-gold: #ffcd75;
+    position: relative;
+    flex: 1;
+    height: 100%;
+    min-height: 420px;
+    overflow: hidden;
+    background: #1d3b22;
+    color: #f4f4f4;
+    font-family: var(--civ-body);
+    font-size: 18px;
+    line-height: 1.15;
+    isolation: isolate;
+    container-type: size;
+    -webkit-font-smoothing: none;
+}
+
+.civ-stage {
+    position: absolute;
+    inset: 0;
+}
+
+.civ-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+    image-rendering: pixelated;
+}
+
+.civ-px,
+.civ-root img {
+    image-rendering: pixelated;
+}
+
+.civ-px {
+    flex-shrink: 0;
+    vertical-align: -3px;
+}
+
+.civ-root button {
+    font: inherit;
+    color: inherit;
+}
+
+/* ——— windows: the blue boxes of old role-playing games ——— */
+
+.civ-win {
+    background: linear-gradient(180deg, var(--civ-win), var(--civ-win2));
+    border: 3px solid var(--civ-edge);
+    border-radius: 6px;
+    box-shadow:
+        0 0 0 3px var(--civ-ink),
+        inset 0 0 0 2px #5a6ccf,
+        6px 6px 0 3px rgba(10, 10, 30, 0.55);
+    color: #f4f4f4;
+}
+
+.civ-win-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px 6px;
+    border-bottom: 2px dashed rgba(244, 244, 244, 0.25);
+}
+
+.civ-win-head h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-family: var(--civ-title);
+    font-size: 10px;
+    line-height: 1.5;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--civ-gold);
+    text-shadow: 2px 2px 0 var(--civ-ink);
+    overflow-wrap: anywhere;
+}
+
+.civ-win-body {
+    padding: 8px 12px 12px;
+}
+
+.civ-x {
+    border: 2px solid var(--civ-edge);
+    background: #b13e53;
+    width: 26px;
+    height: 26px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 16px !important;
+    line-height: 1;
+    box-shadow: inset -2px -2px 0 #5d275d;
+}
+
+.civ-root h4 {
+    margin: 12px 0 2px;
+    font-family: var(--civ-body);
+    font-size: 18px;
+    font-weight: normal;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #73eff7;
+}
+
+.civ-dim {
+    color: rgba(220, 228, 255, 0.6);
+}
+
+.civ-mono {
+    font-family: var(--civ-body);
+    overflow-wrap: anywhere;
+}
+
+.civ-gold {
+    color: var(--civ-gold) !important;
+}
+
+.civ-bad {
+    color: #ff7a7a !important;
+}
+
+/* ——— buttons ——— */
+
+.civ-btn,
+.civ-seg button {
+    font-family: var(--civ-body) !important;
+    font-size: 18px !important;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 2px solid var(--civ-ink);
+    background: #566c86;
+    color: #f4f4f4;
+    padding: 0 9px;
+    height: 30px;
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow:
+        inset 2px 2px 0 #94b0c2,
+        inset -2px -2px 0 #333c57;
+}
+
+.civ-btn:hover,
+.civ-seg button:hover {
+    background: #6a82a0;
+}
+
+.civ-btn:active,
+.civ-btn[aria-pressed="true"],
+.civ-seg button[aria-pressed="true"] {
+    background: #3b5dc9;
+    box-shadow:
+        inset 2px 2px 0 #29366f,
+        inset -2px -2px 0 #41a6f6;
+    color: var(--civ-gold);
+}
+
+.civ-demo {
+    background: #8a4fb5;
+    box-shadow:
+        inset 2px 2px 0 #c58cf0,
+        inset -2px -2px 0 #4b2a6b;
+}
+
+.civ-go {
+    width: 100%;
+    margin-top: 12px;
+    height: 36px;
+    background: #38b764;
+    box-shadow:
+        inset 2px 2px 0 #a7f070,
+        inset -2px -2px 0 #257179;
+}
+
+.civ-danger {
+    width: 100%;
+    margin-top: 12px;
+    background: #b13e53;
+}
+
+.civ-seg {
+    display: flex;
+    gap: 2px;
+}
+
+.civ-blink {
+    animation: civ-blink 1s steps(2, start) infinite;
+}
+
+/* Dims, never hides: a blinking button can always be seen and tapped. */
+@keyframes civ-blink {
+    to {
+        opacity: 0.75;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .civ-root *,
+    .civ-root *::before,
+    .civ-root *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
+.civ-root button:focus-visible,
+.civ-root li:focus-visible {
+    outline: 2px solid var(--civ-gold);
+    outline-offset: 2px;
+}
+
+/* ——— the status bar and the menu ——— */
+
+.civ-hud {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.civ-hud > * {
+    pointer-events: auto;
+}
+
+.civ-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 2px;
+    min-width: 0;
+    padding: 4px 12px;
+    background: var(--civ-ink);
+    border: 3px solid #f4f4f4;
+    box-shadow: 0 0 0 3px var(--civ-ink);
+    font-family: var(--civ-body);
+    font-size: 19px;
+    color: #f4f4f4;
+}
+
+/* Below a wide view, the words after the numbers go: the numbers and the clock always show. */
+@container (max-width: 820px) {
+    .civ-status small {
+        display: none;
+    }
+}
+
+.civ-status span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.civ-status b {
+    font-weight: normal;
+}
+
+.civ-status small {
+    font-size: 17px;
+    color: #94b0c2;
+}
+
+.civ-menu {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 4px;
+    background: var(--civ-ink);
+    border: 3px solid #f4f4f4;
+    box-shadow: 0 0 0 3px var(--civ-ink);
+}
+
+/* ——— the quest log ——— */
+
+.civ-log {
+    position: absolute;
+    top: var(--civ-hud, 66px);
+    right: 14px;
+    bottom: 14px;
+    width: 290px;
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+}
+
+.civ-log ol {
+    list-style: none;
+    margin: 0;
+    padding: 6px 8px 10px;
+    overflow-y: auto;
+    flex: 1;
+    scrollbar-color: #5a6ccf transparent;
+}
+
+.civ-log li {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    column-gap: 8px;
+    padding: 4px 4px;
+    border-radius: 2px;
+    cursor: pointer;
+    animation: civ-in 0.2s steps(3);
+}
+
+@media (hover: hover) {
+    .civ-log li:hover {
+        background: rgba(115, 239, 247, 0.12);
+    }
+}
+
+.civ-log li .civ-px {
+    margin-top: 2px;
+}
+
+.civ-log time {
+    grid-column: 2;
+    font-size: 15px;
+    color: rgba(200, 210, 255, 0.72);
+}
+
+.civ-line {
+    overflow-wrap: anywhere;
+}
+
+.civ-line b {
+    font-weight: normal;
+}
+
+@keyframes civ-in {
+    from {
+        transform: translateX(10px);
+        background: rgba(255, 205, 117, 0.25);
+    }
+}
+
+.civ-tag {
+    font-size: 16px;
+    text-transform: uppercase;
+    padding: 0 5px;
+    background: #b13e53;
+    border: 2px solid var(--civ-ink);
+}
+
+/* ——— sheets ——— */
+
+.civ-sheet {
+    position: absolute;
+    top: var(--civ-hud, 66px);
+    left: 14px;
+    width: 350px;
+    max-height: calc(100% - var(--civ-hud, 66px) - 16px);
+    display: flex;
+    flex-direction: column;
+    z-index: 4;
+    animation: civ-pop 0.18s steps(3);
+}
+
+.civ-sheet .civ-win-body {
+    overflow-y: auto;
+    scrollbar-color: #5a6ccf transparent;
+}
+
+@keyframes civ-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.94);
+    }
+}
+
+.civ-hero {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.civ-hero-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.civ-portrait {
+    width: 80px;
+    height: 104px;
+    flex-shrink: 0;
+    background:
+        radial-gradient(circle at 50% 70%, rgba(115, 239, 247, 0.25), transparent 60%), #101848;
+    border: 3px solid #f4f4f4;
+    box-shadow: 0 0 0 2px var(--civ-ink);
+    border-radius: 3px;
+}
+
+.civ-picture {
+    width: 112px;
+    flex-shrink: 0;
+    background: #4a8f3f;
+    border: 3px solid #f4f4f4;
+    box-shadow: 0 0 0 2px var(--civ-ink);
+    border-radius: 3px;
+}
+
+.civ-class {
+    font-family: var(--civ-body);
+    font-size: 20px;
+    line-height: 1.1;
+    color: var(--civ-gold);
+    text-transform: uppercase;
+}
+
+.civ-flavor {
+    margin: 4px 0 6px;
+    color: #dfe6ff;
+}
+
+.civ-link {
+    border: 0;
+    background: none;
+    padding: 0;
+    margin: 4px 0;
+    cursor: pointer;
+    color: #73eff7 !important;
+    text-decoration: underline dotted;
+    text-align: left;
+}
+
+.civ-xp {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 2px 8px;
+    margin-top: 6px;
+}
+
+.civ-xp small {
+    grid-column: 2;
+    font-family: var(--civ-body);
+    font-size: 15px;
+    color: rgba(220, 228, 255, 0.6);
+}
+
+.civ-bar {
+    height: 10px;
+    background: var(--civ-ink);
+    border: 2px solid #f4f4f4;
+    padding: 1px;
+}
+
+.civ-bar i {
+    display: block;
+    height: 100%;
+    background: #a7f070;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.civ-state {
+    margin-top: 6px;
+    text-transform: uppercase;
+    color: #94b0c2;
+}
+
+.civ-state-working,
+.civ-state-walking {
+    color: var(--civ-gold);
+}
+
+.civ-state-thinking {
+    color: #b48cff;
+    animation: civ-blink 0.8s steps(2, start) infinite;
+}
+
+.civ-state-speaking {
+    color: #a7f070;
+}
+
+.civ-state-error {
+    color: #ff7a7a;
+}
+
+.civ-quest {
+    margin-top: 10px;
+    padding: 4px 10px 6px;
+    background: rgba(10, 12, 40, 0.5);
+    border: 2px solid #ffcd75;
+    border-radius: 3px;
+}
+
+.civ-quest h4 {
+    margin-top: 4px;
+    color: var(--civ-gold);
+}
+
+.civ-quest p {
+    margin: 2px 0;
+    overflow-wrap: anywhere;
+}
+
+.civ-stats {
+    display: grid;
+    /* Labels never wrap; a long value is cut instead. */
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 2px 12px;
+    margin: 6px 0 0;
+}
+
+.civ-stats dt {
+    color: #94b0c2;
+}
+
+.civ-stats dd {
+    margin: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.civ-stats-grid {
+    margin-top: 10px;
+    padding: 6px 10px;
+    background: rgba(10, 12, 40, 0.45);
+    border-radius: 3px;
+}
+
+.civ-skills,
+.civ-ledger,
+.civ-party,
+.civ-key {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.civ-skills li {
+    display: grid;
+    grid-template-columns: 112px 1fr 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+}
+
+.civ-skills b {
+    text-align: right;
+    font-weight: normal;
+}
+
+.civ-ledger li {
+    display: grid;
+    grid-template-columns: 16px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    border-bottom: 1px dashed rgba(244, 244, 244, 0.12);
+}
+
+.civ-ledger b {
+    font-weight: normal;
+    color: var(--civ-gold);
+    white-space: nowrap;
+}
+
+.civ-party li button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 3px 6px;
+    margin: 2px 0;
+    border: 2px solid transparent;
+    background: rgba(10, 12, 40, 0.35);
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.civ-party li button:hover:not(:disabled) {
+    border-color: var(--civ-gold);
+}
+
+.civ-party li button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.civ-party img {
+    width: 30px;
+    height: 39px;
+}
+
+.civ-party span {
+    overflow-wrap: anywhere;
+}
+
+.civ-party b {
+    font-weight: normal;
+    color: var(--civ-gold);
+}
+
+.civ-dialog {
+    margin: 0;
+    padding: 8px 10px;
+    background: #101028;
+    border: 2px solid #f4f4f4;
+    border-radius: 3px;
+    overflow-wrap: anywhere;
+}
+
+.civ-dialog-think {
+    color: #d8c8ff;
+    border-style: dashed;
+}
+
+.civ-caret {
+    font-weight: normal;
+    color: var(--civ-gold);
+    animation: civ-blink 0.6s steps(2, start) infinite;
+}
+
+.civ-key li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+}
+
+.civ-key img {
+    width: 24px;
+    height: 31px;
+    flex-shrink: 0;
+}
+
+.civ-key b {
+    font-weight: normal;
+    color: var(--civ-gold);
+}
+
+.civ-key-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 16px;
+}
+
+.civ-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--civ-ink);
+}
+
+/* ——— the middle of the screen ——— */
+
+.civ-center {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.civ-center > * {
+    pointer-events: auto;
+}
+
+.civ-low {
+    align-items: end;
+    padding-bottom: 36px;
+}
+
+.civ-small {
+    max-width: 380px;
+    margin: 0 16px;
+}
+
+.civ-small p {
+    margin: 4px 0;
+    padding: 0 12px;
+}
+
+.civ-splash {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    pointer-events: none;
+    background: radial-gradient(circle, rgba(16, 24, 72, 0.85), rgba(10, 10, 30, 0.95));
+    animation: civ-splash 2.2s steps(12) forwards;
+}
+
+.civ-splash h1 {
+    margin: 0;
+    font-family: var(--civ-title);
+    font-size: clamp(18px, 5cqw, 40px);
+    line-height: 1.4;
+    color: var(--civ-gold);
+    text-transform: uppercase;
+    text-shadow:
+        4px 4px 0 #b13e53,
+        8px 8px 0 var(--civ-ink);
+}
+
+.civ-splash p {
+    margin: 18px 0 0;
+    font-family: var(--civ-title);
+    font-size: 10px;
+    color: #73eff7;
+    text-transform: uppercase;
+}
+
+@keyframes civ-splash {
+    0%,
+    70% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+        visibility: hidden;
+    }
+}
+
+.civ-replay {
+    position: absolute;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: auto 160px auto;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px 6px 14px;
+    z-index: 3;
+    font-size: 20px;
+    white-space: nowrap;
+}
+
+/* ——— phones ——— */
+
+.civ-narrow .civ-hud {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+.civ-narrow .civ-status {
+    gap: 10px;
+    font-size: 19px;
+    padding: 2px 8px;
+}
+
+.civ-narrow .civ-status small {
+    display: none;
+}
+
+.civ-narrow .civ-menu,
+.civ-narrow .civ-status {
+    flex-wrap: wrap;
+    overflow: visible;
+}
+
+.civ-narrow .civ-menu .civ-btn,
+.civ-narrow .civ-seg button {
+    height: 28px;
+    padding: 0 7px;
+    font-size: 17px !important;
+}
+
+.civ-narrow .civ-log {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    width: auto;
+    height: 46px;
+}
+
+.civ-narrow .civ-drawer {
+    cursor: pointer;
+}
+
+.civ-narrow .civ-drawer .civ-win-head {
+    display: none;
+}
+
+.civ-narrow .civ-drawer ol {
+    overflow: hidden;
+    padding: 6px 8px;
+}
+
+.civ-narrow .civ-drawer li:not(:first-child),
+.civ-narrow .civ-drawer time {
+    display: none;
+}
+
+.civ-narrow .civ-drawer .civ-line {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.civ-narrow .civ-drawer-open {
+    height: 50%;
+}
+
+.civ-narrow .civ-sheet {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 46%;
+}
+
+.civ-narrow .civ-low {
+    padding-bottom: 70px;
+}
+
+.civ-narrow .civ-replay {
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    max-width: calc(100% - 20px);
+    grid-template-columns: auto minmax(40px, 1fr) auto;
+    gap: 8px;
+    font-size: 17px;
+}
+
+/* Fingers need bigger targets than pointers. */
+@media (pointer: coarse) {
+    .civ-root .civ-btn,
+    .civ-root .civ-seg button,
+    .civ-root.civ-narrow .civ-menu .civ-btn,
+    .civ-root.civ-narrow .civ-seg button {
+        height: 40px;
+    }
+
+    .civ-root .civ-x {
+        width: 38px;
+        height: 38px;
+    }
+}
+
+/* An empty list says so across its whole width. */
+.civ-log li.civ-empty {
+    display: block;
+    cursor: default;
+}
+
+/* Long names break at their dashes, not in the middle of a word. */
+.civ-stats dd {
+    overflow-wrap: break-word;
+    word-break: normal;
+}
+
+/* A model's name on one line, cut with an ellipsis if it must be; its provider under it. */
+.civ-model span {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.civ-model small {
+    display: block;
+    color: #94b0c2;
+}
+
+/* On a phone, an open sheet takes the menu's place: more of the town shows. */
+.civ-narrow.civ-carded .civ-menu {
+    display: none;
+}

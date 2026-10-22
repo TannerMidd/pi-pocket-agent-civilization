@@ -1,0 +1,29 @@
+{
+    "name": "pi-pocket-agent-civilization",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Every agent at work as a living pixel-art town, for Pi Pocket.",
+    "license": "MIT",
+    "author": "Tanner Middleton",
+    "engines": {
+        "node": ">=22.19"
+    },
+    "scripts": {
+        "check": "tsc --noEmit -p tsconfig.json && node --check agent-civilization/index.js && node --check agent-civilization/town.js && node --check agent-civilization/pixels.js && node --check agent-civilization/demo.js && node --check agent-civilization/sound.js",
+        "test": "node --test test/*.test.ts",
+        "format:check": "prettier --check --tab-width 4 --print-width 100 agent-civilization.ts agent-civilization/*.js agent-civilization/style.css test/*.ts README.md package.json"
+    },
+    "peerDependencies": {
+        "@earendil-works/pi-durable": "^1.3.0"
+    },
+    "devDependencies": {
+        "@types/node": "^26.6.5",
+        "prettier": "^3.8.0",
+        "typescript": "^6.0.3"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/TannerMidd/pi-pocket-agent-civilization.git"
+    }
+}
