@@ -584,3 +584,114 @@ test("passwords in flags, JSON, and addresses are masked too", async () => {
 
     await town.dispose();
 });
+
+test("in one flush: another session's event, a hidden child's, then the parent's result; each goes out once", async () => {
+    const town = await harness();
+    const text = "Read the spend module and report what calls it";
+
+    await town.meta("7");
+    town.tool("spawn", "7", "subagent", { action: "spawn", name: "scout", message: text });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    town.handlers.beforeRequest!(
+        { messages: [{ role: "user", content: text, timestamp: 1 }] },
+        town.api("9"),
+        {},
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Now, all within one flush:
+    town.tool("other", "7", "read", { path: "a.md" });
+    town.tool("child", "9", "read", { path: "b.md" });
+    town.handlers.afterTool!(
+        {
+            id: "spawn",
+            name: "subagent",
+            arguments: { action: "spawn", name: "scout", message: text },
+        },
+        {
+            isError: false,
+            output: [],
+            details: { conversationId: "9", name: "scout", action: "spawn" },
+        },
+        town.api("7"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const ids = town.sent
+        .filter((each) => each.event === "batch")
+        .flatMap((each) => {
+            const batch = each.data as { events?: { id: number }[]; late?: { id: number }[] };
+
+            return [...(batch.events ?? []), ...(batch.late ?? [])].map((event) => event.id);
+        });
+
+    assert.equal(new Set(ids).size, ids.length, "no event went out twice");
+
+    const sentTools = town.sent
+        .filter((each) => each.event === "batch")
+        .flatMap((each) => {
+            const batch = each.data as {
+                events?: Record<string, unknown>[];
+                late?: Record<string, unknown>[];
+            };
+
+            return [...(batch.events ?? []), ...(batch.late ?? [])];
+        })
+        .filter((event) => event.k === "tool");
+
+    assert.ok(sentTools.some((event) => event.c === "7" && event.i === "a.md"));
+    assert.ok(sentTools.some((event) => event.c === "9" && event.i === "b.md"));
+    await town.dispose();
+});
+
+test("late events of a burst stay within the byte limit", async () => {
+    const town = await harness();
+    const text = "Investigate the flaky animation test and report";
+
+    await town.meta("1");
+    town.tool("spawn", "1", "subagent", { action: "spawn", name: "deep", message: text });
+    town.handlers.beforeRequest!(
+        { messages: [{ role: "user", content: text, timestamp: 1 }] },
+        town.api("2"),
+        {},
+    );
+
+    for (let index = 0; index < 300; index++) {
+        town.handlers.afterResponse!(
+            {
+                content: [{ type: "text", text: `${"long answer ".repeat(60)} ${index}` }],
+                provider: "p",
+                model: "m",
+                timestamp: 1000 + index,
+                usage: { input: 1, output: 1, cost: { total: 0 } },
+            },
+            town.api("2", `t${index}`),
+        );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    town.handlers.afterTool!(
+        {
+            id: "spawn",
+            name: "subagent",
+            arguments: { action: "spawn", name: "deep", message: text },
+        },
+        {
+            isError: false,
+            output: [],
+            details: { conversationId: "2", name: "deep", action: "spawn" },
+        },
+        town.api("1"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 3500));
+
+    const batches = town.sent.filter((each) => each.event === "batch").map((each) => each.data);
+
+    for (const batch of batches) {
+        assert.ok(Buffer.byteLength(JSON.stringify(batch)) < 256 * 1024);
+    }
+
+    const late = batches.flatMap((batch) => (batch as { late?: { k: string }[] }).late ?? []);
+
+    assert.equal(late.filter((event) => event.k === "reply").length, 300);
+    await town.dispose();
+});

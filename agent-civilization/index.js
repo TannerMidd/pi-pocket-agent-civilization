@@ -60,7 +60,7 @@ const day = (at) =>
 /** A record of what the server sent, keyed by its names: with no prototype, no name can reach one. */
 const table = (from) => Object.assign(Object.create(null), from ?? {});
 
-function mergeInto(store, batch) {
+export function mergeInto(store, batch) {
     for (const field of ["convs", "res", "humans"]) {
         for (const [key, value] of Object.entries(batch[field] ?? {})) {
             if (value === null) {
@@ -78,11 +78,36 @@ function mergeInto(store, batch) {
         }
     }
 
-    const fresh = (batch.events ?? []).filter((event) => event.id > store.maxId);
+    // New events and late ones (from a session shown just now, older than some the page has) in one pass:
+    // each once, all in id order.
+    const incoming = [...(batch.late ?? []), ...(batch.events ?? [])];
+
+    if (incoming.length === 0) {
+        return [];
+    }
+
+    const known = new Set(store.events.map((event) => event.id));
+    const fresh = [];
+
+    for (const event of incoming) {
+        if (!known.has(event.id)) {
+            known.add(event.id);
+            fresh.push(event);
+        }
+    }
+
+    fresh.sort((a, b) => a.id - b.id);
 
     if (fresh.length > 0) {
+        const inOrder = fresh[0].id > store.maxId;
+
         store.events.push(...fresh);
-        store.maxId = fresh.at(-1).id;
+
+        if (!inOrder) {
+            store.events.sort((a, b) => a.id - b.id);
+        }
+
+        store.maxId = Math.max(store.maxId, fresh.at(-1).id);
 
         if (store.events.length > MAX_EVENTS) {
             store.events.splice(0, store.events.length - MAX_EVENTS);
@@ -325,8 +350,7 @@ export default function setup(pocket) {
 
         store.batch = batch.n ?? store.batch;
 
-        // Events of a session shown just now, from before it was: in their place, then live like the rest.
-        const fresh = [...insertEvents(store, batch.late ?? []), ...mergeInto(store, batch)];
+        const fresh = mergeInto(store, batch);
 
         track(fresh);
         listeners.forEach((listener) => listener(fresh));

@@ -719,31 +719,33 @@ export default async function createAgentCivilization(host: Host, web: Web) {
             ).delete(part.key);
         }
 
-        let sent = 0;
+        // Late events first (they belong before the new ones), then new events: both in the same byte budget.
+        // What does not fit stays in its queue, in order, for the next flush.
+        const take = (queue: Ev[], field: "late" | "events"): Ev[] => {
+            let sent = 0;
 
-        for (const event of out.outbox) {
-            if (!evOk(event)) {
+            for (const event of queue) {
+                if (!evOk(event)) {
+                    sent++;
+                    continue;
+                }
+
+                const bytes = Buffer.byteLength(JSON.stringify(event)) + 1;
+
+                if (total + bytes > FLUSH_BYTES && total > 0) {
+                    break;
+                }
+
+                room(bytes);
+                ((batch![field] ??= []) as Ev[]).push(event);
                 sent++;
-                continue;
             }
 
-            const bytes = Buffer.byteLength(JSON.stringify(event)) + 1;
+            return queue.slice(sent);
+        };
 
-            if (total + bytes > FLUSH_BYTES && total > 0) {
-                break;
-            }
-
-            room(bytes);
-            (batch!.events as Ev[]).push(event);
-            sent++;
-        }
-
-        out.outbox = out.outbox.slice(sent);
-
-        // Late events go in the first batch; they are few (one subagent's start).
-        const back = out.late.filter(evOk).slice(-300);
-
-        out.late = [];
+        out.late = take(out.late, "late");
+        out.outbox = take(out.outbox, "events");
 
         const ask = [...unknown].filter((id) => world.convs[id] !== undefined && !isOk(id));
 
@@ -755,10 +757,6 @@ export default async function createAgentCivilization(host: Host, web: Web) {
 
         batches[0]!.unknown = ask;
 
-        if (back.length > 0) {
-            batches[0]!.late = back;
-        }
-
         for (const each of batches) {
             each.n = ++state.batch;
             web.send("batch", each);
@@ -766,7 +764,7 @@ export default async function createAgentCivilization(host: Host, web: Web) {
 
         // Only what the byte limit held back waits for another flush.
         if (
-            out.outbox.length > 0 ||
+            out.outbox.length + out.late.length > 0 ||
             changed.convs.size + changed.res.size + changed.humans.size > 0
         ) {
             flushTimer = setTimeout(flush, 1000);
@@ -961,9 +959,20 @@ export default async function createAgentCivilization(host: Host, web: Web) {
 
         // Shown just now (its parent's tool result named it): what it did before goes out too, late.
         if (hidden && isOk(child)) {
+            // Not those still waiting to go out as new: each event goes out once.
+            const queued = new Set(out.outbox.map((event) => event.id));
+
             out.late.push(
-                ...world.events.filter((event) => event.c === child || event.to === child),
+                ...world.events.filter(
+                    (event) => (event.c === child || event.to === child) && !queued.has(event.id),
+                ),
             );
+
+            // Too many to send: let the pages load the world again (the gap in the numbers tells them).
+            if (out.late.length > MAX_OUTBOX) {
+                out.late = [];
+                state.batch++;
+            }
         }
 
         if (name) {
