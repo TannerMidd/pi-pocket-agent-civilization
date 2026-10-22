@@ -163,6 +163,18 @@ export function placeOf(key) {
     };
 }
 
+/** Effects that are only the town's life, not its work: they never keep it at a full frame rate. */
+const AMBIENT = new Set([
+    "smoke",
+    "butterfly",
+    "bird",
+    "firefly",
+    "twinkle",
+    "rain",
+    "dust",
+    "splash",
+]);
+
 const oracleColor = (provider) =>
     Object.hasOwn(ORACLES, provider) ? ORACLES[provider] : SHIRTS[hash(provider) % SHIRTS.length];
 
@@ -257,7 +269,14 @@ export class Town {
         this.camT = { x: 0, y: 0 };
         this.born = Date.now();
         /** People who asked for less motion: no flashes, no rain, no glides, no typing. */
-        this.calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        this.motion = matchMedia("(prefers-reduced-motion: reduce)");
+        this.calm = this.motion.matches;
+
+        this.onMotion = () => {
+            this.calm = this.motion.matches;
+        };
+
+        this.motion.addEventListener?.("change", this.onMotion);
         this.S = 3;
         /** The frame's own scale over S: below 1 to fit "See all" exactly, and in between while a zoom glides. */
         this.k = 1;
@@ -311,6 +330,7 @@ export class Town {
         this.running = false;
         cancelAnimationFrame(this.frame);
         this.unbind?.();
+        this.motion?.removeEventListener?.("change", this.onMotion);
     }
 
     resize(width, height) {
@@ -356,10 +376,12 @@ export class Town {
             return;
         }
 
-        // A quiet town draws 20 frames a second, not 60: a phone's battery lasts.
+        // A quiet town draws 20 frames a second, not 60: a phone's battery lasts. Birds, smoke, and fireflies
+        // do not count; a hand on the town does.
         const quiet =
             !this.glide &&
-            this.fx.length === 0 &&
+            performance.now() > (this.touchedUntil ?? 0) &&
+            this.fx.every((f) => AMBIENT.has(f.kind)) &&
             this.flyers.length === 0 &&
             ![...this.citizens.values()].some(
                 (citizen) => citizen.task || citizen.thinking || citizen.path.length > 0,
@@ -2511,12 +2533,21 @@ export class Town {
             return;
         }
 
-        // Less motion: a zoom is a cut.
+        // Less motion: a zoom is a cut, about the same point as a glide would be.
         if (this.calm) {
+            const world = anchor ? this.toWorld(anchor.x, anchor.y) : null;
+
             this.S = S;
             this.kGoal = k;
             this.k = k;
             this.glide = null;
+
+            if (anchor && world) {
+                const [vx, vy] = this.viewCenter();
+
+                this.cam.x = this.camT.x = world.x - (anchor.x * this.dpr - vx) / this.E;
+                this.cam.y = this.camT.y = world.y - (anchor.y * this.dpr - vy) / this.E;
+            }
 
             return;
         }
@@ -4469,7 +4500,13 @@ export class Town {
             return [event.clientX - box.left, event.clientY - box.top];
         };
 
+        // While a hand is on the town, it draws at full speed.
+        const touch = () => {
+            this.touchedUntil = performance.now() + 1500;
+        };
+
         const onDown = (event) => {
+            touch();
             canvas.setPointerCapture?.(event.pointerId);
             pointers.set(event.pointerId, local(event));
 
@@ -4493,6 +4530,8 @@ export class Town {
         };
 
         const onMove = (event) => {
+            touch();
+
             const [x, y] = local(event);
 
             if (!pointers.has(event.pointerId)) {
@@ -4602,6 +4641,7 @@ export class Town {
         };
 
         const onWheel = (event) => {
+            touch();
             event.preventDefault();
             wheel += event.deltaY * (event.ctrlKey ? 4 : 1);
 
@@ -4686,7 +4726,8 @@ export class Town {
             tokens,
             cost,
             places: this.places.size,
-            hour,
+            // To the minute: the clock shows no more, and the page draws again only when this changes.
+            hour: Math.floor(hour * 60) / 60,
             night: this.nightness() > 0.5,
             storm: this.storminess() > 0,
             zoom: this.E / this.dpr,

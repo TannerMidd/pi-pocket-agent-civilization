@@ -241,12 +241,28 @@ export default function setup(pocket) {
                 store.boot = world.boot ?? null;
                 store.unknown = new Map((world.unknown ?? []).map((id) => [id, 0]));
 
-                // Batches that came while it loaded, and are newer than what it holds.
+                // Batches that came while it loaded, and are newer than what it holds, in order. One
+                // missing among them: load once more.
+                let gap = false;
+
                 for (const batch of buffered ?? []) {
                     if ((!batch.boot || batch.boot === store.boot) && !(batch.n <= store.batch)) {
+                        if (typeof batch.n === "number" && batch.n !== store.batch + 1) {
+                            gap = true;
+                            break;
+                        }
+
                         mergeInto(store, batch);
                         store.batch = batch.n ?? store.batch;
                     }
+                }
+
+                if (gap) {
+                    store.loaded = false;
+                    buffered = null;
+                    loading = null;
+
+                    return load();
                 }
 
                 store.loaded = true;
@@ -860,6 +876,7 @@ export default function setup(pocket) {
             const asked = new Set();
             const retryAt = new Map();
             const askedAt = new Map();
+            const askedTries = new Map();
             const failures = new Map();
             let asking = false;
             let lastLog = -1;
@@ -931,12 +948,14 @@ export default function setup(pocket) {
                         const conv = store.convs[id];
                         // Titles change (Pi names a new session after its first answer): a session is
                         // asked again now and then, sooner while it still has a placeholder title.
+                        // Untitled: after 20 s, then 40 s, 80 s, … up to 5 minutes; 5 tries at most.
+                        const untitled = !conv?.title || /^new session$/i.test(conv.title);
+                        const tries = askedTries.get(id) ?? 0;
                         const stale =
                             asked.has(id) &&
+                            (!untitled || tries < 5) &&
                             now - (askedAt.get(id) ?? 0) >
-                                (!conv?.title || /^new session$/i.test(conv.title)
-                                    ? 20_000
-                                    : 300_000);
+                                (untitled ? Math.min(300_000, 20_000 * 2 ** tries) : 300_000);
 
                         return (
                             /^\d+$/.test(id) &&
@@ -953,6 +972,10 @@ export default function setup(pocket) {
                     }
 
                     return;
+                }
+
+                if (asked.has(want)) {
+                    askedTries.set(want, (askedTries.get(want) ?? 0) + 1);
                 }
 
                 asked.add(want);
@@ -1108,12 +1131,16 @@ export default function setup(pocket) {
         useEffect(() => {
             const onKey = (event) => {
                 const active = document.activeElement;
+                const elsewhere = active && !rootRef.current?.contains(active);
 
-                // Not when the focus is somewhere else in the app (a menu, a dialog, the message box).
+                // Not while typing, or in a menu or dialog of the app; a button (the rail's) is fine.
                 if (
                     event.key !== "Escape" ||
                     event.defaultPrevented ||
-                    (active && active !== document.body && !rootRef.current?.contains(active))
+                    (elsewhere &&
+                        (active.isContentEditable ||
+                            ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName) ||
+                            active.closest?.('[role="dialog"], [role="menu"], dialog')))
                 ) {
                     return;
                 }
