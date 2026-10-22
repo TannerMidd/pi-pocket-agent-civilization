@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 // @ts-expect-error: the browser module is plain JavaScript, without types.
-import { KEEP, Projects, planOf, styleOf, titleOf } from "../agent-civilization/sites.js";
+import * as sites from "../agent-civilization/sites.js";
+
+const { KEEP, Projects, categoryOf, fileOf, planOf, styleOf, titleOf } = sites;
 
 type Event = Record<string, unknown> & { k: string };
 
@@ -306,6 +308,40 @@ test("the style follows the kind of work that weighed most", () => {
     assert.equal(styleOf({ artifact: 2, read: 2 }), "atelier");
     assert.equal(styleOf({ memory: 2, read: 1 }), "vault");
     assert.equal(styleOf({ read: 4, write: 3, shell: 3, git: 2, web: 2 }), "manor");
+});
+
+test("shell commands that only read count as reading, and their file is the stone", () => {
+    const shell = (l: string) => ({ n: "bash", s: "shell", i: l.split(" ")[0], l });
+
+    assert.equal(categoryOf(shell("cat agent-civilization/sites.js")), "read");
+    assert.equal(categoryOf(shell("grep -n style test/sites.test.ts")), "read");
+    assert.equal(categoryOf(shell("sed -n 1,40p town.js")), "read");
+    assert.equal(categoryOf(shell("sed -i s/a/b/ README.md")), "write");
+    assert.equal(categoryOf(shell("cat a.txt > b.txt")), "shell");
+    assert.equal(categoryOf(shell("npm test")), "shell");
+    assert.equal(fileOf("sed -n 1,40p town.js"), "town.js");
+    assert.equal(
+        fileOf("grep -n 'style' agent-civilization/sites.js | head -5"),
+        "agent-civilization/sites.js",
+    );
+    assert.equal(fileOf("ls"), "ls");
+    assert.equal(fileOf('grep -nEi "\\b(the the|a a)\\b" READ…'), "grep -nEi");
+
+    const { projects, feed, work, ask } = town();
+
+    ask("s", "Explain the styles");
+    work("s", shell("cat agent-civilization/sites.js"));
+    work("s", shell("sed -n 1,40p agent-civilization/sites.js"));
+    work("s", shell("grep -n KEEP test/sites.test.ts"));
+    feed({ k: "idle", c: "s" });
+
+    const [project] = only(projects);
+
+    assert.deepEqual(
+        [...project.reads.keys()],
+        ["agent-civilization/sites.js", "test/sites.test.ts"],
+    );
+    assert.equal(project.style, "study");
 });
 
 test("a title is the request's first sentence, without the markers of who sent it", () => {

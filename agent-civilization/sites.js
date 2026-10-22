@@ -147,6 +147,60 @@ const WALLS = {
 
 const PROPS = ["barrel", "flowers", "bench", "lamp", "fence", "well", "hay", "pot"];
 
+/** Programs that only look at files: a shell call to one is reading, not a program at work. */
+const READERS = new Set([
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "grep",
+    "egrep",
+    "rg",
+    "ag",
+    "ls",
+    "find",
+    "fd",
+    "wc",
+    "nl",
+    "tree",
+    "file",
+    "stat",
+    "diff",
+    "jq",
+    "awk",
+    "sed",
+]);
+
+/** The file a shell command reads or writes, if its words name one; else the command. */
+export function fileOf(command) {
+    const words = String(command ?? "")
+        .split(/[\s|;&<>()]+/)
+        .filter((word) => word && !word.startsWith("-") && !/^\d+(,\d+)?p$/.test(word));
+    const file = words.slice(1).find((word) => /[\w-]\.[A-Za-z0-9]{1,6}$|\//.test(word));
+
+    // No file named (or it was cut off a long command): the program and its first word.
+    const short = String(command ?? "")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .join(" ");
+
+    return (file ?? short).replace(/^['"]|['"]$/g, "");
+}
+
+/** Whether a shell command only reads (cat, grep, sed -n…), and whether it edits in place (sed -i). */
+function shellKind(call) {
+    const program = String(call.i ?? "");
+    const command = String(call.l ?? "");
+
+    if (program === "sed" && /\s-i\b|\s--in-place/.test(command)) {
+        return "write";
+    }
+
+    return READERS.has(program) && !/>\s*[\w./~-]/.test(command) ? "read" : "shell";
+}
+
 /** The kind of work a tool call is. */
 export function categoryOf(call) {
     if (call.n === "subagent" || call.n === "team") {
@@ -160,7 +214,7 @@ export function categoryOf(call) {
     }
 
     if (sector === "shell") {
-        return "shell";
+        return shellKind(call);
     }
 
     if (sector === "github") {
@@ -586,7 +640,11 @@ export class Projects {
             project.counts[kind] = (project.counts[kind] ?? 0) + 1;
         }
 
-        const item = String(call.i || call.l || call.n);
+        // A shell call that reads or edits a file builds as that file.
+        const item =
+            call.s === "shell" && kind !== "shell"
+                ? fileOf(call.l)
+                : String(call.i || call.l || call.n);
 
         const add = (map, key) => {
             const fresh = !map.has(key);

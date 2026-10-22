@@ -7,11 +7,12 @@ task becomes a building of its own, put up beside its agent's house by the work 
 
 ![The demo town: a finished building, its sheet, and the quest log](docs/demo-town.png)
 
-**[Watch the demo (under 2 minutes, 2560×1440)](https://github.com/TannerMidd/pi-pocket-agent-civilization/releases/download/v1.0.0/agent-civilization-demo.mp4):**
-a real task (Pi, two subagents, and a linked session review this extension's README: 3 minutes and
-5 cents of real work), replayed from its own events, then the busy demo town.
+**[Watch the demo (2¼ minutes, 2560×1440)](https://github.com/TannerMidd/pi-pocket-agent-civilization/releases/download/v1.1.0/agent-civilization-demo.mp4):**
+a real session (Pi, two subagents, and a linked session do four tasks on this extension: about 4
+minutes and 3 cents of real work), replayed from its own events as each task becomes a building, then
+the busy demo town.
 
-![A real task: Pi's session, two subagents' tents, and a linked session's house](docs/real-task.png)
+![A real session: four tasks became four buildings beside Pi's house, and the linked session built its own](docs/real-task.png)
 
 Version **1.1.0** needs **Pi Pocket 0.19.0** or later (extension API **2**). It needs no network, no
 outside service, no model calls of its own, and no setting.
