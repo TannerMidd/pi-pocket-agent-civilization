@@ -6,9 +6,9 @@ a walk to a building, models are oracle temples that pay out coins, and messages
 
 ![The demo town, with a character sheet and the quest log](docs/demo-town.png)
 
-**[Watch the demo (2½ minutes, 1600×900)](https://github.com/TannerMidd/pi-pocket-agent-civilization/releases/download/v1.0.0/agent-civilization-demo.mp4):**
-a real task filmed live (Pi, two subagents, and a linked session review this extension's README), then
-the busy demo town.
+**[Watch the demo (under 2 minutes, 2560×1440)](https://github.com/TannerMidd/pi-pocket-agent-civilization/releases/download/v1.0.0/agent-civilization-demo.mp4):**
+a real task (Pi, two subagents, and a linked session review this extension's README: 3 minutes and
+5 cents of real work), replayed from its own events, then the busy demo town.
 
 ![A real task: Pi's session, two subagents' tents, and a linked session's house](docs/real-task.png)
 
