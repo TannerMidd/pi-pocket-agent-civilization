@@ -2,9 +2,10 @@
 
 Every agent at work, as a living retro pixel-art town. Sessions are wizards with houses, subagents are
 apprentices camped in tents beside them, and linked sessions are envoys down the road. Each tool call is
-a walk to a building, models are oracle temples that pay out coins, and messages fly by pigeon.
+a walk to a building, models are oracle temples that pay out coins, and messages fly by pigeon. And every
+task becomes a building of its own, put up beside its agent's house by the work itself.
 
-![The demo town, with a character sheet and the quest log](docs/demo-town.png)
+![The demo town: a finished building, its sheet, and the quest log](docs/demo-town.png)
 
 **[Watch the demo (under 2 minutes, 2560×1440)](https://github.com/TannerMidd/pi-pocket-agent-civilization/releases/download/v1.0.0/agent-civilization-demo.mp4):**
 a real task (Pi, two subagents, and a linked session review this extension's README: 3 minutes and
@@ -12,7 +13,7 @@ a real task (Pi, two subagents, and a linked session review this extension's REA
 
 ![A real task: Pi's session, two subagents' tents, and a linked session's house](docs/real-task.png)
 
-Version **1.0.0** needs **Pi Pocket 0.19.0** or later (extension API **2**). It needs no network, no
+Version **1.1.0** needs **Pi Pocket 0.19.0** or later (extension API **2**). It needs no network, no
 outside service, no model calls of its own, and no setting.
 
 ## Install
@@ -27,7 +28,7 @@ and install it. It installs off: turn it on in Menu → **Extensions**.
 extensions/
   agent-civilization.ts
   agent-civilization/
-    index.js  town.js  pixels.js  demo.js  sound.js  style.css
+    index.js  town.js  sites.js  pixels.js  demo.js  sound.js  style.css
     fonts/    CivPixelStart.woff2  VT323.woff2  OFL-PressStart2P.txt  OFL-VT323.txt
 ```
 
@@ -42,6 +43,8 @@ Open **Civilization** in the rail (or "Open Agent Civilization" in the launcher,
 - **See all:** the whole town in view. Drag to pan; scroll or pinch to zoom.
 - **Tap anyone** for their character sheet: what they do now, model, thinking level, tool calls,
   tokens, spend, errors, the tools they used, the files they touched, and their team.
+- **Tap a building of a task** for its story: what was asked and by whom, who built it, how long it
+  took, its calls, failures, and cost, and each part with the file, program, or site it stands for.
 - **Replay:** the day again as a time-lapse. **Log:** the quest log. **Help:** the manual.
 
 ### What you see
@@ -66,6 +69,34 @@ Open **Civilization** in the rail (or "Open Agent Civilization" in the launcher,
 | A pigeon with a letter / a scroll     | A message, a subagent's task, or its report                                 |
 | ✓ / skull over a head                 | A tool call that worked / failed                                            |
 | A storm                               | 3 or more failed tool calls in the last 45 seconds, and a high failure rate |
+
+### Every task is a building
+
+A message to an agent (from a person, a schedule, a PR watch, or the session that started it) opens a
+building site beside its house, under a sign with the task's first words. Each tool call that finishes
+adds a part, and a brick flies to the site from the building where the call ran. Under the site, a line
+says what was just added. A subagent's work builds its parent's site.
+
+| Work                        | Part                                       |
+| --------------------------- | ------------------------------------------ |
+| A file read (each file)     | A foundation stone; a helper's in its hue  |
+| A file written (each file)  | A storey (up to 4)                         |
+| A program run               | A chimney (up to 2), smoking while it runs |
+| A web host                  | A pennant on a mast                        |
+| A `git` or `gh` command     | A crate in the yard                        |
+| An MCP server               | A flag in its hue                          |
+| An artifact                 | An easel                                   |
+| A memory                    | A glowing rune                             |
+| A helper (subagent, linked) | A banner in its hue                        |
+| A failed call               | A crack                                    |
+
+When the agent answers and its helpers are done, the scaffolding comes down. The building takes the
+style of the work that weighed most: a **study** (reading), **workshop** (edits), **foundry**
+(commands), **lookout** (the web), **warehouse** (git), **council hall** (helpers), **trading post**
+(MCP), **atelier** (artifacts), **archive** (memory), or a **manor** (a bit of everything). Its walls,
+roof, windows, door, colours, and yard come from the task itself, so no two look alike. Big jobs get a
+tower. A task where most calls failed is left a ruin. A message answered with no tool call builds
+nothing. Each house keeps its newest 6 buildings, and the Replay raises them again, task by task.
 
 A day lasts 8 minutes. Windows, lanterns, and campfires light up at night. Names and signs use a 5×7
 pixel font with Latin letters only: other scripts show as `?`. With "reduce motion" on in your system,
@@ -146,8 +177,11 @@ no prototype.
 - `town.js`: the engine. It lays the town out to fit the view's shape, walks citizens along roads, and
   draws a low-resolution frame scaled up by a whole number, with words in a layer of their own so they
   read well at any zoom. Day and night, weather, the replay, and picking by tap.
+- `sites.js`: every task as a building. A model of projects made from the events alone (tested in
+  `test/sites.test.ts`), where each lot goes, and how each style and part draws.
 - `pixels.js`: the palette, a 5×7 bitmap font, 8×8 icons, and the sprites.
-- `demo.js`: a plausible fake town, in the server's event format.
+- `demo.js`: a plausible fake town, in the server's event format. Each ask has a theme and a size, so
+  its tasks raise different buildings.
 - `sound.js`: chiptune music and effects made with Web Audio; no sound files. Off until you turn it on.
 - `style.css` and `fonts/`: the windows, buttons, and phone layout, in Civ Pixel Start (Press Start 2P, renamed) and VT323 (WOFF2,
   the only font type Pi Pocket serves to extensions).

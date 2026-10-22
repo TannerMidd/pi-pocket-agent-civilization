@@ -438,6 +438,11 @@
     border-radius: 3px;
 }
 
+.civ-site-picture {
+    width: 132px;
+    image-rendering: pixelated;
+}
+
 .civ-class {
     font-family: var(--civ-body);
     font-size: 20px;

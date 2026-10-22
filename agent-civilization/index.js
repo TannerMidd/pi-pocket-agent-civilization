@@ -60,6 +60,34 @@ const day = (at) =>
 /** A record of what the server sent, keyed by its names: with no prototype, no name can reach one. */
 const table = (from) => Object.assign(Object.create(null), from ?? {});
 
+/** A span of time in words: "45 s", "3 min", "1 h 20 min". */
+const span = (ms) => {
+    const seconds = Math.max(0, Math.round(ms / 1000));
+
+    if (seconds < 60) {
+        return `${seconds} s`;
+    }
+
+    const minutes = Math.round(seconds / 60);
+
+    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+};
+
+/** The icon of each part of a building site. */
+const PART_ICON = {
+    read: "book",
+    write: "quill",
+    shell: "hammer",
+    git: "anchor",
+    web: "globe",
+    mcp: "flag",
+    artifact: "frame",
+    memory: "key",
+    delegate: "tent",
+    other: "gear",
+    fail: "skull",
+};
+
 export function mergeInto(store, batch) {
     for (const field of ["convs", "res", "humans"]) {
         for (const [key, value] of Object.entries(batch[field] ?? {})) {
@@ -522,6 +550,103 @@ export default function setup(pocket) {
             <//>`;
         }
 
+        if (info.type === "site") {
+            const building = info.state === "building";
+            const ruin = info.state === "ruin";
+
+            return html`<${Window}
+                title=${info.title}
+                icon=${ruin ? "skull" : "house"}
+                onClose=${onClose}
+                className="civ-sheet"
+            >
+                <div class="civ-hero">
+                    <img class="civ-picture civ-site-picture" src=${info.picture} alt="" />
+                    <div class="civ-hero-text">
+                        <div class="civ-class">
+                            ${building ? "Under construction" : ruin ? `A ruined ${info.style.name.toLowerCase()}` : info.style.name}
+                        </div>
+                        <p class="civ-flavor">
+                            ${building ? "Each tool call that finishes adds a part. When the work ends, the building takes the style of what it mostly was." : ruin ? "Too many of its tool calls failed." : info.style.about}
+                        </p>
+                        <button
+                            class="civ-link"
+                            disabled=${!info.owner.here}
+                            onClick=${() => onPick({ type: "citizen", id: info.owner.id })}
+                        >
+                            ${`Built by ${ellipsize(info.owner.name, 28)}`}
+                        </button>
+                    </div>
+                </div>
+                ${
+                    building &&
+                    info.now &&
+                    html`<div class="civ-quest">
+                        <h4>Just now</h4>
+                        <p>▶ ${info.now}</p>
+                    </div>`
+                }
+                <dl class="civ-stats civ-stats-grid">
+                    <dt>Asked by</dt>
+                    <dd>${info.askers.length > 0 ? ellipsize(info.askers.join(", "), 30) : "—"}</dd>
+                    <dt>Started</dt>
+                    <dd>${day(info.start)}</dd>
+                    <dt>${building ? "Working for" : "Took"}</dt>
+                    <dd>${span((info.end ?? Date.now()) - info.start)}</dd>
+                    <dt>Tool calls</dt>
+                    <dd>${fmt(info.calls)}</dd>
+                    <dt>Failed</dt>
+                    <dd class=${info.fails ? "civ-bad" : ""}>${fmt(info.fails)}</dd>
+                    <dt>Spent</dt>
+                    <dd class="civ-gold">${money(info.cost)}</dd>
+                </dl>
+                ${
+                    info.helpers.length > 0 &&
+                    html`<h4>Helpers</h4>
+                        <ul class="civ-party">
+                            ${info.helpers.map(
+                                (helper) =>
+                                    html`<li>
+                                        <button
+                                            disabled=${!helper.here}
+                                            onClick=${() => onPick({ type: "citizen", id: helper.id })}
+                                        >
+                                            ${helper.look ? html`<img src=${portrait(helper.look, 2)} alt="" />` : html`<${Px} name="tent" size=${24} />`}
+                                            <span><b>${ellipsize(helper.name, 30)}</b></span>
+                                        </button>
+                                    </li>`,
+                            )}
+                        </ul>`
+                }
+                ${info.groups.map(
+                    (group) =>
+                        html`<h4>
+                                ${group.title}${" "}<small class="civ-dim"
+                                    >${`· ${group.about}`}</small
+                                >
+                            </h4>
+                            <ul class="civ-ledger">
+                                ${group.items.map(
+                                    ([name, count]) =>
+                                        html`<li>
+                                            <${Px} name=${PART_ICON[group.kind]} size=${16} />
+                                            <span class="civ-mono">${ellipsize(name, 44)}</span>
+                                            <b>${count > 1 ? `×${count}` : ""}</b>
+                                        </li>`,
+                                )}
+                                ${
+                                    group.more > 0 &&
+                                    html`<li class="civ-dim">
+                                        <span></span>
+                                        <span>${`and ${group.more} more`}</span>
+                                        <b></b>
+                                    </li>`
+                                }
+                            </ul>`,
+                )}
+            <//>`;
+        }
+
         if (info.type === "royal") {
             return html`<${Window}
                 title=${info.name}
@@ -748,6 +873,23 @@ export default function setup(pocket) {
                     <span
                         >Sparks fly to a model's temple while an agent thinks, and coins (tokens)
                         come back.</span
+                    >
+                </li>
+                <li>
+                    <span
+                        >Every task becomes a building beside its agent's house. Each tool call that
+                        finishes adds a part: a stone for a file read, a storey for a file written,
+                        a chimney for a program, a mast for a website, a crate for git, a flag for
+                        an MCP server, a banner for a helper, a crack for a failure. Bricks fly from
+                        the tool's building to the site.</span
+                    >
+                </li>
+                <li>
+                    <span
+                        >When the task ends, the scaffolding comes down and the building takes the
+                        style of what the work mostly was: a study, workshop, foundry, lookout,
+                        warehouse, council hall, trading post, atelier, archive, or manor. Each
+                        house keeps its last 6. Tap one for its story.</span
                     >
                 </li>
                 <li><span>A skull: a tool call failed. Many failures bring a storm.</span></li>
@@ -1584,7 +1726,7 @@ export default function setup(pocket) {
                                     key=${line.id}
                                     tabindex=${line.c && (!narrow || expanded) ? 0 : undefined}
                                     role=${line.c && (!narrow || expanded) ? "button" : undefined}
-                                    onClick=${narrow && !expanded ? undefined : () => line.c && pick({ type: "citizen", id: line.c })}
+                                    onClick=${narrow && !expanded ? undefined : () => line.c && pick(line.site ? { type: "site", id: line.site } : { type: "citizen", id: line.c })}
                                     onKeyDown=${(event) => {
                                         if (
                                             (event.key === "Enter" || event.key === " ") &&
@@ -1592,7 +1734,11 @@ export default function setup(pocket) {
                                             (!narrow || expanded)
                                         ) {
                                             event.preventDefault();
-                                            pick({ type: "citizen", id: line.c });
+                                            pick(
+                                                line.site
+                                                    ? { type: "site", id: line.site }
+                                                    : { type: "citizen", id: line.c },
+                                            );
                                         }
                                     }}
                                 >

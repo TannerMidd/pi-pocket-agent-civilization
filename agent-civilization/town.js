@@ -34,6 +34,7 @@ import {
     textWidth,
     wrap,
 } from "./pixels.js";
+import { Sites } from "./sites.js";
 
 const TAU = Math.PI * 2;
 const PLAZA = 34;
@@ -305,6 +306,7 @@ export class Town {
         this.flash = 0;
         this.nextBolt = 8;
         this.nextFlock = 20;
+        this.sites = new Sites(this, { plaza: PLAZA, buildings: BUILDINGS });
         this.loop = this.loop.bind(this);
         this.bindInput();
 
@@ -433,6 +435,8 @@ export class Town {
         this.chronicleVersion++;
         this.selected = null;
         this.replay = null;
+        this.sites.clear();
+        this.sites.spots.clear();
         this.dirty = true;
         this.follow = true;
         this.tracking = null;
@@ -1177,6 +1181,7 @@ export class Town {
             this.resettle();
         }
 
+        this.sites.layout();
         this.firstBuild = false;
         this.buildTerrain();
     }
@@ -1270,14 +1275,17 @@ export class Town {
             ...this.homes.values(),
             ...this.tents.values(),
             ...(this.castle ? [this.castle] : []),
+            ...this.sites.things(),
         ];
         let minX = -PLAZA - 40;
         let minY = -PLAZA - 40;
         let maxX = PLAZA + 40;
         let maxY = PLAZA + 40;
 
+        this.sites.terrainDirty = false;
+
         for (const thing of things) {
-            const def = BUILDINGS[thing.kind] ?? { w: 16, h: 14 };
+            const def = BUILDINGS[thing.kind] ?? thing.foot ?? { w: 16, h: 14 };
 
             minX = Math.min(minX, thing.x - def.w / 2 - 20);
             maxX = Math.max(maxX, thing.x + def.w / 2 + 20);
@@ -1322,11 +1330,16 @@ export class Town {
             own(this.castle.trail);
         }
 
-        const paths = [...this.tents.values()].flatMap((tent) =>
-            tent.trail
-                .slice(0, tent.trail.indexOf(tent.home.door) + 1)
-                .flatMap((point, index, list) => (index === 0 ? [] : [[list[index - 1], point]])),
-        );
+        const paths = [
+            ...[...this.tents.values()].flatMap((tent) =>
+                tent.trail
+                    .slice(0, tent.trail.indexOf(tent.home.door) + 1)
+                    .flatMap((point, index, list) =>
+                        index === 0 ? [] : [[list[index - 1], point]],
+                    ),
+            ),
+            ...this.sites.paths(),
+        ];
         const key = `${box.x},${box.y},${box.w},${box.h}|${roads.map(([a, b]) => `${a.x},${a.y},${b.x},${b.y}`).join(";")}|${paths.map(([a, b]) => `${a.x},${a.y},${b.x},${b.y}`).join(";")}`;
 
         if (key === this.terrainKey) {
@@ -1459,7 +1472,7 @@ export class Town {
         };
 
         for (const thing of things) {
-            const def = BUILDINGS[thing.kind] ?? { w: 18, h: 14 };
+            const def = BUILDINGS[thing.kind] ?? thing.foot ?? { w: 18, h: 14 };
 
             mark(
                 thing.x - def.w / 2 - 12,
@@ -1894,6 +1907,8 @@ export class Town {
         if (!this.touches(event)) {
             return;
         }
+
+        this.sites.feed(event, live);
 
         if (event.k === "tool" && (live || !this.replay)) {
             this.callTimes.push(this.replay ? performance.now() : event.at);
@@ -2339,6 +2354,7 @@ export class Town {
 
         this.chronicle = lines;
         this.chronicleVersion++;
+        this.sites.derive(events);
     }
 
     // ——— time-lapse ———
@@ -2377,6 +2393,7 @@ export class Town {
         this.flyers = [];
         this.chronicle = [];
         this.chronicleVersion++;
+        this.sites.clear();
         // The replay's own clock: no live counts mixed in.
         this.callTimes = [];
         this.errorTimes = [];
@@ -2625,7 +2642,12 @@ export class Town {
         const building = [...this.homes.values(), ...this.tents.values()].filter(
             (thing) => thing.shown && thing.built < 1,
         );
-        const around = [...busy, ...busy.map((citizen) => citizen.home), ...building];
+        const around = [
+            ...busy,
+            ...busy.map((citizen) => citizen.home),
+            ...building,
+            ...this.sites.active(),
+        ];
 
         if (around.length === 0) {
             around.push(this.citizens.get(this.focus) ?? middle);
@@ -2652,6 +2674,12 @@ export class Town {
         this.t += dt;
 
         const t = this.t;
+
+        this.sites.update(dt);
+
+        if (this.sites.terrainDirty) {
+            this.buildTerrain();
+        }
 
         if (this.replay) {
             const replay = this.replay;
@@ -2711,7 +2739,9 @@ export class Town {
             const where =
                 this.tracking.type === "citizen"
                     ? this.citizens.get(this.tracking.id)
-                    : (this.places.get(this.tracking.id) ?? this.homes.get(this.tracking.id));
+                    : this.tracking.type === "site"
+                      ? this.sites.where(this.tracking.id)
+                      : (this.places.get(this.tracking.id) ?? this.homes.get(this.tracking.id));
 
             if (where) {
                 this.camT.x = where.x;
@@ -3561,11 +3591,14 @@ export class Town {
             }
         }
 
+        this.sites.drawables((each) => drawables.push(each), inView, b, t, night);
         drawables.sort((a, c) => a.y - c.y);
 
         for (const each of drawables) {
             each.draw();
         }
+
+        this.sites.drawBricks(b);
 
         // Royals on the castle wall.
         if (this.castle && this.castle.built >= 1) {
@@ -3914,6 +3947,8 @@ export class Town {
             out.push({ x: tent.x + 9, y: tent.y + 3, r: 20, color: C.orange });
         }
 
+        this.sites.lights(out);
+
         for (const citizen of this.citizens.values()) {
             if (!citizen.inside && citizen.shown) {
                 out.push({
@@ -4080,6 +4115,16 @@ export class Town {
             }
         }
 
+        for (const { project, spot, plan } of this.sites.shown()) {
+            const height = this.sites.where(project.id)?.height ?? 30;
+            const [x0, y0] = P(spot.x - plan.w / 2, spot.y - height + 4);
+            const [x1, y1] = P(spot.x + plan.w / 2, spot.y);
+
+            if (x1 > -40 && x0 < uw + 40 && y1 > -40 && y0 < uh + 40) {
+                solids.push([x0, y0, x1 - x0, y1 - y0]);
+            }
+        }
+
         // A sign keeps 2 pixels clear of any building's art.
         const onArt = (x, y, w, h) =>
             solids.some(
@@ -4164,6 +4209,14 @@ export class Town {
                         label(fit(doing, 140), fx, fy + 13, C.white, true);
                     }
                 }
+            } else if (ref.type === "site") {
+                const where = this.sites.where(ref.id);
+
+                if (where) {
+                    const [x, y] = P(where.x, where.y - where.height);
+
+                    this.cursor(u, x, y - 14, strong);
+                }
             } else {
                 const thing =
                     ref.type === "place"
@@ -4185,6 +4238,39 @@ export class Town {
         // a tap or a closer zoom, so the words never bury the town.
         const close = zoom >= 1.6;
         const near = zoom >= 3;
+
+        // Building sites: what each task is, over it, and the part its work just added, under it.
+        const sites = this.sites.shown();
+
+        const siteSign = ({ project, spot, plan }, chosen) => {
+            const where = this.sites.where(project.id);
+            const building = !plan.done;
+            const [x, y] = P(spot.x, spot.y - (where?.height ?? 30));
+            const [bx, by] = P(spot.x, spot.y + 4);
+            const sign = fit(project.title, building ? 150 : 110);
+            const color = building ? C.gold : plan.ruin ? C.silver : "#ffe7a8";
+
+            const above = label(sign, x, y - 11, color, chosen, true);
+            const below = !above && label(sign, bx, by + 2, color, chosen, true);
+
+            if (building && project.now && (above || below)) {
+                label(
+                    fit(project.now.label, 150),
+                    bx,
+                    by + 2 + (below ? LINE + 1 : 0),
+                    C.white,
+                    chosen,
+                );
+            }
+        };
+
+        for (const site of sites) {
+            const chosen = this.selected?.type === "site" && this.selected.id === site.project.id;
+
+            if (!site.plan.done || chosen) {
+                siteSign(site, chosen);
+            }
+        }
 
         for (const place of this.places.values()) {
             if (place.shown && place.built >= 1) {
@@ -4210,6 +4296,15 @@ export class Town {
 
                     label(name, bx, by + 2, C.white, false, true);
                 }
+            }
+        }
+
+        for (const site of close ? sites : []) {
+            if (
+                site.plan.done &&
+                !(this.selected?.type === "site" && this.selected.id === site.project.id)
+            ) {
+                siteSign(site, false);
             }
         }
 
@@ -4422,6 +4517,12 @@ export class Town {
             }
         }
 
+        const site = this.sites.pick(p, reach);
+
+        if (site) {
+            return { type: "site", id: site };
+        }
+
         // The one in front wins where buildings overlap: nearest the bottom first.
         for (const place of [...this.places.values()].sort((a, c) => c.y - a.y)) {
             const def = BUILDINGS[place.kind];
@@ -4458,7 +4559,9 @@ export class Town {
                 ? this.citizens.get(ref.id)
                 : ref.type === "place"
                   ? this.places.get(ref.id)
-                  : this.royals.get(ref.id);
+                  : ref.type === "site"
+                    ? this.sites.where(ref.id)
+                    : this.royals.get(ref.id);
 
         if (where) {
             this.camT = { x: where.x, y: where.y - 12 };
@@ -4800,6 +4903,10 @@ export class Town {
                 first: conv.first,
                 last: conv.last,
             };
+        }
+
+        if (ref.type === "site") {
+            return this.sites.selection(ref.id);
         }
 
         if (ref.type === "place") {

@@ -62,19 +62,70 @@ const THOUGHTS = [
     "Maybe the linked session can draft the release notes while the tests run.",
     "Two routes share a prefix; the fixed part wins, so items/new is safe.",
 ];
+// Each ask has a theme, which leans its tool calls one way, and a size: so each task builds something of its own.
 const ASKS = [
-    "Run the full test suite and report only failures.",
-    "Find every caller of spend.check and list them.",
-    "Review the diff in src/server/spend.ts for edge cases.",
-    "Check the page on a phone viewport and screenshot the result.",
-    "Measure how long the session list takes to load with 500 sessions.",
+    { text: "Run the full test suite and report only failures.", theme: "shell", size: [3, 6] },
+    { text: "Find every caller of spend.check and list them.", theme: "read", size: [4, 8] },
+    { text: "Review the diff in src/server/spend.ts for edge cases.", theme: "git", size: [3, 6] },
+    {
+        text: "Check the page on a phone viewport and screenshot the result.",
+        theme: "web",
+        size: [3, 6],
+    },
+    {
+        text: "Measure how long the session list takes to load with 500 sessions.",
+        theme: "shell",
+        size: [4, 7],
+    },
 ];
 const HUMAN_ASKS = [
-    "Can you make the budget cover linked sessions too?",
-    "Ship it when the tests are green 🚀",
-    "Why is the settings page slow on my phone?",
-    "Add a small test for the replay case.",
+    { text: "Can you make the budget cover linked sessions too?", theme: "write", size: [9, 15] },
+    { text: "Ship it when the tests are green 🚀", theme: "git", size: [5, 9] },
+    { text: "Why is the settings page slow on my phone?", theme: "web", size: [5, 9] },
+    { text: "Add a small test for the replay case.", theme: "shell", size: [4, 8] },
+    {
+        text: "Read the spend code and explain how the limits work.",
+        theme: "read",
+        size: [8, 14],
+    },
+    { text: "Check Linear for open issues about budgets.", theme: "mcp", size: [3, 6] },
+    { text: "Sketch a page that shows spend per session.", theme: "artifact", size: [4, 7] },
+    { text: "Remember that Kai reviews every budget change.", theme: "memory", size: [2, 3] },
+    { text: "Tidy the docs for the new limit.", theme: "write", size: [3, 6] },
+    {
+        text: "Look around the repo and tell me what looks risky.",
+        theme: "mixed",
+        size: [12, 20],
+    },
 ];
+
+// How often each kind of call comes, for each theme: read, write, shell, git, web, mcp, memory, artifact, script.
+const LEANS = {
+    read: [62, 5, 14, 4, 7, 3, 2, 0, 3],
+    write: [30, 45, 15, 4, 2, 2, 0, 0, 2],
+    shell: [18, 12, 58, 6, 2, 2, 0, 0, 2],
+    git: [14, 8, 12, 56, 3, 5, 0, 0, 2],
+    web: [12, 5, 6, 3, 66, 4, 0, 2, 2],
+    mcp: [12, 4, 4, 6, 4, 68, 0, 0, 2],
+    memory: [25, 5, 5, 0, 0, 0, 65, 0, 0],
+    artifact: [22, 8, 8, 0, 20, 0, 0, 40, 2],
+    mixed: [50, 18, 18, 10, 8, 8, 3, 1, 3],
+};
+
+const lean = (theme) => {
+    const weights = LEANS[theme] ?? LEANS.mixed;
+    let roll = Math.random() * weights.reduce((sum, each) => sum + each, 0);
+
+    for (let index = 0; index < weights.length; index++) {
+        roll -= weights[index];
+
+        if (roll < 0) {
+            return index;
+        }
+    }
+
+    return 0;
+};
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
@@ -203,14 +254,32 @@ export class Demo {
 
     // ——— what agents do ———
 
-    human(name, to, text) {
+    human(name, to, ask) {
         const person = (this.data.humans[name] ??= { name, count: 0, last: 0 });
 
         person.count++;
         person.last = Date.now();
         this.changed.humans.add(name);
-        this.emit("msg", { from: `human:${name}`, to, via: "human", text });
+        this.assign(to, ask);
+        this.emit("msg", { from: `human:${name}`, to, via: "human", text: ask.text });
         this.later(500, () => this.think(to));
+    }
+
+    /** A new task for an agent: its theme and size, unless it is busy with one (then the words join that). */
+    assign(id, ask) {
+        const conv = this.conv(id);
+
+        if (conv.task) {
+            return;
+        }
+
+        const [least, most] = ask.size ?? [4, 10];
+
+        conv.task = {
+            theme: ask.theme ?? "mixed",
+            size: least + Math.floor(Math.random() * (most - least + 1)),
+            calls: 0,
+        };
     }
 
     think(id) {
@@ -225,7 +294,13 @@ export class Demo {
         const tin = 8000 + Math.round(Math.random() * 40000);
         const tout = 200 + Math.round(Math.random() * 1800);
         const cost = (tin * 3 + tout * 15) / 1e6;
-        const final = conv.turns > 2 && Math.random() < 0.18;
+
+        // Woken by a report with no task of its own: a short follow-up on the same work.
+        if (!conv.task) {
+            this.assign(id, { theme: "mixed", size: [1, 3] });
+        }
+
+        const final = conv.task.calls >= conv.task.size;
 
         conv.turns++;
         conv.tin += tin;
@@ -245,6 +320,7 @@ export class Demo {
                 stop: "stop",
                 text: pick(SAYINGS),
             });
+            conv.task = null;
             this.later(400, () => {
                 this.emit("idle", { c: id });
 
@@ -296,20 +372,35 @@ export class Demo {
     tool(id, done) {
         const conv = this.conv(id);
         const roll = Math.random();
+        const kind = lean(conv.task?.theme);
+
+        if (conv.task) {
+            conv.task.calls++;
+        }
+
         const call = `demo:${++this.seq}`;
         let event;
 
-        if (
-            conv.kind !== "subagent" &&
-            roll < 0.12 &&
-            Object.values(this.data.convs).filter(
+        if (conv.kind !== "subagent" && roll < 0.08) {
+            const moons = Object.values(this.data.convs).filter(
                 (each) => each.parent === id && each.kind === "subagent",
-            ).length < 4
-        ) {
-            this.spawn(id, call);
-            this.later(600, done);
+            );
+            const idle = moons.filter((each) => !each.task);
 
-            return;
+            if (moons.length < 4) {
+                this.spawn(id, call);
+                this.later(600, done);
+
+                return;
+            }
+
+            // Enough apprentices: now and then, work for one that rests.
+            if (idle.length > 0 && roll < 0.03) {
+                this.send(id, pick(idle), call);
+                this.later(600, done);
+
+                return;
+            }
         }
 
         if (conv.kind === "session" && !conv.parent && roll < 0.16 && !this.linkedMade) {
@@ -320,9 +411,9 @@ export class Demo {
             return;
         }
 
-        if (roll < 0.5) {
+        if (kind <= 1) {
             const file = pick(FILES);
-            const write = Math.random() < 0.3;
+            const write = kind === 1;
             const verb = write ? pick(["wrote", "edited"]) : "read";
 
             event = {
@@ -336,12 +427,12 @@ export class Demo {
             conv.files[file][write ? "w" : "r"]++;
             conv.files[file].last = Date.now();
             this.touch("files", file, id, write);
-        } else if (roll < 0.68) {
+        } else if (kind === 2) {
             const command = pick(COMMANDS);
 
             event = { n: "bash", s: "shell", i: command.split(" ")[0], l: command };
             this.touch("shell", command.split(" ")[0], id);
-        } else if (roll < 0.78) {
+        } else if (kind === 3) {
             const command = pick(GIT);
 
             event = {
@@ -351,19 +442,24 @@ export class Demo {
                 l: command,
             };
             this.touch("github", event.i, id);
-        } else if (roll < 0.86) {
+        } else if (kind === 4) {
             const site = pick(SITES);
 
             event = { n: "browser", s: "web", i: site, l: `navigate ${site}` };
             this.touch("web", site, id);
-        } else if (roll < 0.94) {
+        } else if (kind === 5) {
             const [server, name] = pick(MCP);
 
             event = { n: "mcp_call", s: `mcp:${server}`, i: name, l: `${server} · ${name}` };
             this.touch(`mcp:${server}`, name, id);
-        } else if (roll < 0.97) {
+        } else if (kind === 6) {
             event = { n: "memory", s: "memory", i: "add", l: "memory add" };
             this.touch("memory", "add", id);
+        } else if (kind === 7) {
+            const page = pick(["spend-by-session.html", "budget-chart.svg", "limits.md"]);
+
+            event = { n: "artifact", s: "artifact", i: page, l: `published ${page}` };
+            this.touch("artifact", page, id);
         } else {
             event = { n: "codemode", s: "codemode", i: "script", l: "ran a script" };
             this.touch("codemode", "script", id);
@@ -423,8 +519,29 @@ export class Demo {
         this.emit("link", { c: id, p: parent, kind: "subagent", name });
         this.later(250, () => {
             this.emit("done", { c: parent, call, n: "subagent", ok: 1 });
-            this.emit("msg", { from: parent, to: id, via: "subagent", text: ask });
+            this.assign(id, ask);
+            this.emit("msg", { from: parent, to: id, via: "subagent", text: ask.text });
             this.later(500, () => this.think(id));
+        });
+    }
+
+    send(parent, moon, call) {
+        const ask = pick(ASKS);
+
+        this.conv(parent).calls++;
+        this.emit("tool", {
+            c: parent,
+            call,
+            n: "subagent",
+            l: `send ${moon.name}`,
+            a: "send",
+            tn: moon.name,
+        });
+        this.later(250, () => {
+            this.emit("done", { c: parent, call, n: "subagent", ok: 1 });
+            this.assign(moon.id, ask);
+            this.emit("msg", { from: parent, to: moon.id, via: "subagent", text: ask.text });
+            this.later(500, () => this.think(moon.id));
         });
     }
 
@@ -452,12 +569,14 @@ export class Demo {
         this.emit("link", { c: id, p: parent, kind: "linked" });
         this.later(300, () => {
             this.emit("done", { c: parent, call, n: "team", ok: 1 });
-            this.emit("msg", {
-                from: parent,
-                to: id,
-                via: "team",
+            const ask = {
                 text: "Draft release notes for 0.20 from the merged PRs; send them back when done.",
-            });
+                theme: "git",
+                size: [6, 10],
+            };
+
+            this.assign(id, ask);
+            this.emit("msg", { from: parent, to: id, via: "team", text: ask.text });
             this.later(600, () => this.think(id));
         });
     }
@@ -476,13 +595,18 @@ export class Demo {
         });
         this.flushSoon();
         this.later(700, () =>
-            this.human(
-                "Robin",
-                main,
-                "Make the budget cover linked sessions, and keep the tests lean.",
-            ),
+            this.human("Robin", main, {
+                text: "Make the budget cover linked sessions, and keep the tests lean.",
+                theme: "write",
+                size: [16, 22],
+            }),
         );
-        this.later(16000, () => this.human("Kai", main, "I can review the PR once it's up 👀"));
+        this.later(16000, () =>
+            this.human("Kai", main, {
+                text: "I can review the PR once it's up 👀",
+                theme: "mixed",
+            }),
+        );
         // The first moons and a linked world come early, so there is something to see at once.
         [5000, 9000, 19000].forEach((ms) =>
             this.later(ms, () => this.spawn(main, `demo:${++this.seq}`)),
@@ -502,20 +626,13 @@ export class Demo {
                 return !last || last.k === "idle" || Date.now() - last.at > 12000;
             });
 
-            if (idle.length > 0) {
-                const conv = pick(idle);
+            // Only sessions get new asks out of the blue: apprentices get theirs from their wizard's work.
+            const sessions = idle.filter((conv) => conv.kind !== "subagent");
 
-                if (conv.kind === "subagent" && conv.parent) {
-                    this.emit("msg", {
-                        from: conv.parent,
-                        to: conv.id,
-                        via: "subagent",
-                        text: pick(ASKS),
-                    });
-                    this.later(400, () => this.think(conv.id));
-                } else {
-                    this.human(Math.random() < 0.7 ? "Robin" : "Kai", conv.id, pick(HUMAN_ASKS));
-                }
+            if (sessions.length > 0) {
+                const conv = pick(sessions);
+
+                this.human(Math.random() < 0.7 ? "Robin" : "Kai", conv.id, pick(HUMAN_ASKS));
             }
 
             this.later(9000 + Math.random() * 5000, nudge);
